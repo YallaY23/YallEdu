@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>YallEdu</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background-color: #f4f4f4; text-align: center; }
+        .screen { display: none; }
+        .active { display: block; }
+        button { padding: 10px 20px; margin: 5px; background-color: #007BFF; color: white; border: none; border-radius: 5px; cursor: pointer; }
+        button:hover { background-color: #0056b3; }
+        input, select { padding: 8px; margin: 5px; width: 200px; }
+        .card { background: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); max-width: 500px; margin: 20px auto; }
+        ul { list-style: none; padding: 0; }
+        li button { background-color: #28a745; }
+        .mcq-options { display: flex; flex-direction: column; }
+        .mcq-options button { background-color: #6c757d; margin: 5px 0; }
+        #timer { font-size: 18px; color: #dc3545; }
+        #achievements { font-size: 14px; color: #17a2b8; }
+    </style>
+    <!-- Chart.js for Progress Dashboard -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+<!-- Login Screen -->
+<div id="loginScreen" class="screen active">
+    <h1>YallEdu</h1>
+    <div class="card">
+        <h2>Login</h2>
+        <input id="loginUsername" type="text" placeholder="Username"><br>
+        <input id="loginPassword" type="password" placeholder="Password"><br>
+        <button onclick="login()">Login</button>
+        <p>Not registered? <button onclick="showScreen('registerScreen')">Register</button></p>
+    </div>
+</div>
+
+<!-- Register Screen -->
+<div id="registerScreen" class="screen">
+    <h1>YallEdu</h1>
+    <div class="card">
+        <h2>Register</h2>
+        <input id="regUsername" type="text" placeholder="Username"><br>
+        <input id="regPassword" type="password" placeholder="Password"><br>
+        <button onclick="register()">Register</button>
+        <p>Back to <button onclick="showScreen('loginScreen')">Login</button></p>
+    </div>
+</div>
+
+<!-- Main Menu -->
+<div id="mainScreen" class="screen">
+    <h1>YallEdu - Learn!</h1>
+    <div class="card">
+        <h2>Subjects</h2>
+        <ul>
+            <li><button onclick="startSubject('english')">English</button></li>
+            <li><button onclick="startSubject('dutch')">Dutch</button></li>
+            <li><button onclick="startSubject('french')">French</button></li>
+            <li><button onclick="startSubject('turkish')">Turkish</button></li>
+            <li><button onclick="startSubject('biology')">Biology</button></li>
+            <li><button onclick="startSubject('history')">History</button></li>
+            <li><button onclick="startSubject('music')">Music</button></li>
+        </ul>
+        <button onclick="showScreen('dashboardScreen')">Dashboard</button>
+        <button onclick="showScreen('profileScreen')">Profile</button>
+        <button onclick="logout()">Logout</button>
+    </div>
+</div>
+
+<!-- Subject Screen (Dynamic) -->
+<div id="subjectScreen" class="screen">
+    <h1 id="subjectTitle">YallEdu</h1>
+    <div class="card">
+        <select id="difficulty" onchange="changeDifficulty()">
+            <option value="easy">Easy</option>
+            <option value="medium">Medium</option>
+            <option value="hard">Hard</option>
+        </select>
+        <h2 id="question">Loading...</h2>
+        <div id="answerInput" style="display: block;">
+            <input id="textAnswer" type="text" placeholder="Answer">
+            <button onclick="checkAnswer(false)">Check</button>
+        </div>
+        <div id="mcqOptions" class="mcq-options" style="display: none;"></div>
+        <p id="timer">Time: 10s</p>
+        <p id="score">Correct: 0</p>
+        <p id="achievements">Achievements: None</p>
+        <button onclick="showScreen('mainScreen'); stopTimer();">Back</button>
+    </div>
+</div>
+
+<!-- Dashboard Screen -->
+<div id="dashboardScreen" class="screen">
+    <h1>YallEdu - Dashboard</h1>
+    <div class="card">
+        <canvas id="progressChart" width="400" height="200"></canvas>
+        <button onclick="showScreen('mainScreen')">Back</button>
+    </div>
+</div>
+
+<!-- Profile Screen -->
+<div id="profileScreen" class="screen">
+    <h1>YallEdu - Profile</h1>
+    <div class="card">
+        <h2 id="profileUsername">Username</h2>
+        <input id="newPassword" type="password" placeholder="New Password"><br>
+        <button onclick="updatePassword()">Update Password</button>
+        <p>Total Correct: <span id="totalScore">0</span></p>
+        <button onclick="showScreen('mainScreen')">Back</button>
+    </div>
+</div>
+
+<script>
+    // Core State
+    let users = JSON.parse(localStorage.getItem('users') || '{}');
+    let currentUser = null;
+    let currentSubject = null;
+    let timerInterval = null;
+
+    // Subject Data with Levels
+    const subjects = {
+        english: {
+            easy: [{ q: "Hello", a: "Hallo", options: ["Hallo", "Huis", "Hond"] }],
+            medium: [{ q: "Friend", a: "Vriend", options: ["Vriend", "Vijand", "Vader"] }],
+            hard: [{ q: "Knowledge", a: "Kennis", options: ["Kennis", "Kracht", "Kleur"] }],
+            score: 0
+        },
+        dutch: {
+            easy: [{ q: "Hallo", a: "Hello", options: ["Hello", "House", "Dog"] }],
+            medium: [{ q: "Boek", a: "Book", options: ["Book", "Boat", "Bake"] }],
+            hard: [{ q: "Vrijheid", a: "Freedom", options: ["Freedom", "Friendship", "Force"] }],
+            score: 0
+        },
+        french: {
+            easy: [{ q: "Bonjour", a: "Hello", options: ["Hello", "Goodbye", "Yes"] }],
+            medium: [{ q: "Maison", a: "House", options: ["House", "Mouse", "Home"] }],
+            hard: [{ q: "Liberté", a: "Freedom", options: ["Freedom", "Liberty", "Love"] }],
+            score: 0
+        },
+        turkish: {
+            easy: [{ q: "Merhaba", a: "Hello", options: ["Hello", "Big", "Car"] ]}
+            medium: [{ q: "Sandalye", a: "Chair", options: ["Laptop", "Chair", "Game"] ]}
+            hard: [{ q: "Yemek", a: "Eat", options: ["Eat", "Doner", "Fries"] ]}
+            score: 0
+        },
+        biology: {
+            easy: [{ q: "Smallest unit?", a: "Cell", options: ["Cell", "Atom", "Molecule"] }],
+            medium: [{ q: "Plant energy?", a: "Photosynthesis", options: ["Photosynthesis", "Respiration", "Digestion"] }],
+            hard: [{ q: "DNA full name?", a: "Deoxyribonucleic Acid", options: ["Deoxyribonucleic Acid", "Ribonucleic Acid", "Protein"] }],
+            score: 0
+        },
+        history: {
+            easy: [{ q: "WW2 end year?", a: "1945", options: ["1945", "1939", "1918"] }],
+            medium: [{ q: "First US President?", a: "George Washington", options: ["George Washington", "Abraham Lincoln", "Thomas Jefferson"] }],
+            hard: [{ q: "Magna Carta year?", a: "1215", options: ["1215", "1492", "1776"] }],
+            score: 0
+        },
+        music: {
+            easy: [{ q: "Guitar strings?", a: "6", options: ["6", "4", "8"] }],
+            medium: [{ q: "4 beats note?", a: "Quarter Note", options: ["Quarter Note", "Half Note", "Whole Note"] }],
+            hard: [{ q: "Beethoven’s 5th?", a: "Da-da-da-dum", options: ["Da-da-da-dum", "Twinkle Twinkle", "Happy Birthday"] }],
+            score: 0
+        }
+    };
+
+    // Achievements
+    const achievements = {
+        "Beginner": { condition: score => score >= 5, earned: false },
+        "Scholar": { condition: score => score >= 20, earned: false },
+        "Master": { condition: score => score >= 50, earned: false }
+    };
+
+    // Screen Navigation
+    function showScreen(screenId) {
+        stopTimer();
+        document.querySelectorAll('.screen').forEach(screen => screen.classList.remove('active'));
+        document.getElementById(screenId).classList.add('active');
+        if (screenId === 'dashboardScreen') updateDashboard();
+        if (screenId === 'profileScreen') updateProfile();
+    }
+
+    // User Management
+    function login() {
+        let username = document.getElementById('loginUsername').value;
+        let password = document.getElementById('loginPassword').value;
+        if (users[username] && users[username].password === password) {
+            currentUser = username;
+            loadUserProgress();
+            showScreen('mainScreen');
+        } else {
+            alert('Wrong username or password!');
+        }
+    }
+
+    function register() {
+        let username = document.getElementById('regUsername').value;
+        let password = document.getElementById('regPassword').value;
+        if (!username || !password) {
+            alert('Please fill in all fields!');
+        } else if (users[username]) {
+            alert('Username taken!');
+        } else {
+            users[username] = {
+                password,
+                progress: { english: 0, dutch: 0, french: 0, biology: 0, history: 0, music: 0 },
+                achievements: {}
+            };
+            saveUsers();
+            alert('Registered! Please login.');
+            showScreen('loginScreen');
+        }
+    }
+
+    function logout() {
+        currentUser = null;
+        showScreen('loginScreen');
+    }
+
+    function loadUserProgress() {
+        if (users[currentUser].progress) {
+            Object.keys(subjects).forEach(subject => {
+                subjects[subject].score = users[currentUser].progress[subject] || 0;
+            });
+        }
+        if (users[currentUser].achievements) {
+            Object.keys(achievements).forEach(key => {
+                achievements[key].earned = users[currentUser].achievements[key] || false;
+            });
+        }
+    }
+
+    function saveUsers() {
+        localStorage.setItem('users', JSON.stringify(users));
+    }
+
+    // Subject Handling
+    function startSubject(subject) {
+        currentSubject = subject;
+        document.getElementById('subjectTitle').innerText = `YallEdu - ${subject.charAt(0).toUpperCase() + subject.slice(1)}`;
+        changeDifficulty();
+        showScreen('subjectScreen');
+    }
+
+    function changeDifficulty() {
+        stopTimer();
+        let difficulty = document.getElementById('difficulty').value;
+        let items = subjects[currentSubject][difficulty];
+        let item = items[Math.floor(Math.random() * items.length)];
+        subjects[currentSubject].currentItem = item;
+        document.getElementById('question').innerText = item.q;
+
+        let isMCQ = Math.random() > 0.5;
+        if (isMCQ) {
+            document.getElementById('answerInput').style.display = 'none';
+            document.getElementById('mcqOptions').style.display = 'block';
+            let options = shuffleArray([...item.options]);
+            document.getElementById('mcqOptions').innerHTML = options.map(opt =>
+                `<button onclick="checkAnswer(true, '${opt}')">${opt}</button>`
+            ).join('');
+        } else {
+            document.getElementById('answerInput').style.display = 'block';
+            document.getElementById('mcqOptions').style.display = 'none';
+        }
+
+        document.getElementById('score').innerText = `Correct: ${subjects[currentSubject].score}`;
+        updateAchievements();
+        startTimer();
+    }
+
+    function checkAnswer(isMCQ, selectedOption) {
+        stopTimer();
+        let answer = isMCQ ? selectedOption : document.getElementById('textAnswer').value.trim().toLowerCase();
+        let correct = subjects[currentSubject].currentItem.a.toLowerCase();
+        if (answer === correct) {
+            subjects[currentSubject].score++;
+            users[currentUser].progress[currentSubject] = subjects[currentSubject].score;
+            saveUsers();
+            alert("Correct!");
+        } else {
+            alert(`Wrong! It’s "${subjects[currentSubject].currentItem.a}".`);
+        }
+        changeDifficulty();
+    }
+
+    // Timer
+    function startTimer() {
+        let timeLeft = 10;
+        document.getElementById('timer').innerText = `Time: ${timeLeft}s`;
+        timerInterval = setInterval(() => {
+            timeLeft--;
+            document.getElementById('timer').innerText = `Time: ${timeLeft}s`;
+            if (timeLeft <= 0) {
+                stopTimer();
+                alert("Time’s up!");
+                changeDifficulty();
+            }
+        }, 1000);
+    }
+
+    function stopTimer() {
+        if (timerInterval) {
+            clearInterval(timerInterval);
+            timerInterval = null;
+        }
+    }
+
+    // Achievements
+    function updateAchievements() {
+        let totalScore = Object.values(subjects).reduce((sum, s) => sum + s.score, 0);
+        Object.keys(achievements).forEach(key => {
+            if (!achievements[key].earned && achievements[key].condition(totalScore)) {
+                achievements[key].earned = true;
+                users[currentUser].achievements[key] = true;
+                saveUsers();
+                alert(`Achievement Unlocked: ${key}!`);
+            }
+        });
+        let earned = Object.keys(achievements).filter(key => achievements[key].earned).join(', ') || 'None';
+        document.getElementById('achievements').innerText = `Achievements: ${earned}`;
+    }
+
+    // Dashboard
+    let chart = null;
+    function updateDashboard() {
+        let ctx = document.getElementById('progressChart').getContext('2d');
+        if (chart) chart.destroy();
+        chart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: Object.keys(subjects),
+                datasets: [{
+                    label: 'Correct Answers',
+                    data: Object.values(subjects).map(s => s.score),
+                    backgroundColor: '#007BFF'
+                }]
+            },
+            options: { scales: { y: { beginAtZero: true } } }
+        });
+    }
+
+    // Profile
+    function updateProfile() {
+        document.getElementById('profileUsername').innerText = currentUser;
+        let totalScore = Object.values(subjects).reduce((sum, s) => sum + s.score, 0);
+        document.getElementById('totalScore').innerText = totalScore;
+    }
+
+    function updatePassword() {
+        let newPassword = document.getElementById('newPassword').value;
+        if (newPassword) {
+            users[currentUser].password = newPassword;
+            saveUsers();
+            alert('Password updated!');
+            document.getElementById('newPassword').value = '';
+        }
+    }
+
+    // Utility
+    function shuffleArray(array) {
+        for (let i = array.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [array[i], array[j]] = [array[j], array[i]];
+        }
+        return array;
+    }
+</script>
+<script src="cordova.js"></script>
+</body>
+</html>
